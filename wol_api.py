@@ -8,6 +8,8 @@ load_dotenv()
 app = Flask(__name__)
 
 MAC_ADDRESS = os.getenv("MAC_ADDRESS")
+WOL_API_PORT = int(os.getenv("WOL_API_PORT", 8000))
+WOL_API_IP = os.getenv("WOL_API_IP")
 
 
 @app.route("/wake", methods=["POST"])
@@ -20,4 +22,4 @@ def wake():
 
 
 if __name__ == "__main__":
-    app.run(host="100.85.127.57", port=8000)
+    app.run(host=WOL_API_IP, port=WOL_API_PORT)
