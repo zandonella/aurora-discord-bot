@@ -131,3 +131,7 @@ def pc_shutdown():
 def pc_reboot():
     os.system("sudo reboot")
     return jsonify({"status": "ok", "message": "Rebooting PC"})
+
+
+if __name__ == "__main__":
+    app.run(host=SERVER_API_IP, port=SERVER_API_PORT)
