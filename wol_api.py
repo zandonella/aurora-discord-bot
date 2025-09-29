@@ -1,0 +1,23 @@
+from flask import Flask, jsonify
+from wakeonlan import send_magic_packet
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+app = Flask(__name__)
+
+MAC_ADDRESS = os.getenv("MAC_ADDRESS")
+
+
+@app.route("/wake", methods=["POST"])
+def wake():
+    try:
+        send_magic_packet(MAC_ADDRESS)
+        return jsonify({"status": "ok", "message": "Magic packet sent."}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+if __name__ == "__main__":
+    app.run(host="100.85.127.57", port=8000)

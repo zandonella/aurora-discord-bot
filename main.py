@@ -3,10 +3,17 @@ from discord.ext import commands, tasks
 from discord import app_commands
 from dotenv import load_dotenv
 import os
+import asyncio
+import aiohttp
+from mcstatus import JavaServer
 
 load_dotenv()
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+PC_IP = os.getenv("PC_IP")
+MAC_ADDRESS = os.getenv("MAC_ADDRESS")
+MC_PORT = int(os.getenv("MC_PORT", 25565))
+WOL_API_IP = os.getenv("WOL_API_IP")
 GUILD_ID = discord.Object(id=1011467123480072214)
 
 
@@ -33,11 +40,32 @@ last_server_status = None
 last_minecraft_status = None
 
 
+# returns true if host is online
+async def ping_host(host: str) -> bool:
+    proc = await asyncio.create_subprocess_exec(
+        "ping",
+        "-n",
+        "1",
+        host,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    return await proc.wait() == 0
+
+
+async def isMinecraftOnline(host: str, port: int) -> bool:
+    try:
+        server = JavaServer(host, port)
+        status = await server.status()
+        print(status)
+        return True  # if no exception, server is up
+    except Exception:
+        return False
+
+
 async def get_server_status():
-    # Replace this with real checks (ping, API call, etc.)
-    global fakeServerStatus, fakeMinecraftStatus
-    server_online = fakeServerStatus
-    minecraft_online = fakeMinecraftStatus
+    server_online = await ping_host(PC_IP)
+    minecraft_online = await isMinecraftOnline(PC_IP, MC_PORT)
     return server_online, minecraft_online
 
 
@@ -90,10 +118,14 @@ async def refresh_status(
 
 
 async def start_pc():
-    # your start-PC logic here
-    global fakeServerStatus
-    fakeServerStatus = True
-    pass
+    async with aiohttp.ClientSession() as session:
+        async with session.post(f"{WOL_API_IP}/wake") as resp:
+            data = await resp.json()
+            print(data)
+            if resp.status == 200:
+                return True, data
+            else:
+                return False, data
 
 
 async def shutdown_pc():
@@ -119,6 +151,11 @@ async def stop_minecraft():
     # your stop-MC logic here
     global fakeMinecraftStatus
     fakeMinecraftStatus = False
+    pass
+
+
+async def restart_minecraft():
+    # your restart-MC logic here
     pass
 
 
@@ -207,19 +244,25 @@ async def status_command(interaction: discord.Interaction):
         except discord.NotFound:
             pass  # already deleted manually
 
+    loading_embed = discord.Embed(
+        title="Fetching Server Status...",
+        description="Please wait a moment ⏳",
+        color=discord.Color.greyple(),
+    )
+    await interaction.response.send_message(embed=loading_embed)
+
+    # get message
+    msg = await interaction.original_response()
+
     server_online, minecraft_online = await get_server_status()
     embed = build_embed(server_online, minecraft_online)
 
-    await interaction.response.send_message(
-        embed=embed, view=ControlView(server_online, minecraft_online)
-    )
+    await msg.edit(embed=embed, view=ControlView(server_online, minecraft_online))
 
     last_server_status = server_online
     last_minecraft_status = minecraft_online
 
-    status_message = await interaction.channel.fetch_message(
-        (await interaction.original_response()).id
-    )
+    status_message = msg
 
 
 # PC command group
@@ -229,7 +272,12 @@ pc_group = app_commands.Group(name="pc", description="PC server controls")
 @pc_group.command(name="start", description="Start the PC server")
 async def pc_start(interaction: discord.Interaction):
     await interaction.response.send_message("Starting PC...")
-    await start_pc()
+
+    success, data = await start_pc()
+    if success:
+        await interaction.followup.send("PC started successfully.")
+    else:
+        await interaction.followup.send(f"Failed to start PC: {data}")
 
 
 @pc_group.command(name="shutdown", description="Shut down the PC server")
@@ -258,6 +306,12 @@ async def mc_start(interaction: discord.Interaction):
 async def mc_stop(interaction: discord.Interaction):
     await interaction.response.send_message("Stopping Minecraft...")
     await stop_minecraft()
+
+
+@mc_group.command(name="restart", description="Restart the Minecraft server")
+async def mc_restart(interaction: discord.Interaction):
+    await interaction.response.send_message("Restarting Minecraft...")
+    await restart_minecraft()
 
 
 # Register both groups
