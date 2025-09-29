@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 import os
 import asyncio
 import aiohttp
-from mcstatus import JavaServer
 
 load_dotenv()
 
